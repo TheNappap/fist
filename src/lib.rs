@@ -2,23 +2,29 @@
 
 #![warn(missing_docs)]
 #![allow(incomplete_features)]
-#![feature(const_generics,raw,unsize,const_if_match,specialization)]
+#![feature(unsize)]
 
 #[cfg(test)]
 mod tests;
 
+use std::marker::{PhantomData, Unsize};
 use std::mem;
-use std::marker::{Unsize, PhantomData};
-use std::ops::{Deref,DerefMut};
+use std::ops::{Deref, DerefMut};
 
 /// Fixed Sized Trait (Object) (FiST)
 pub struct Fist<T: ?Sized, const SIZE: usize> {
     data: [u8; SIZE],
     vtable: *mut (),
-    _p: PhantomData<T>
+    _p: PhantomData<T>,
 }
 
-impl<T: ?Sized, const SIZE: usize> Fist<T,SIZE> {
+impl<T: ?Sized, const SIZE: usize> Fist<T, SIZE> {
+    const fn check_size<V>() {
+        if mem::size_of::<V>() > SIZE {
+            panic!("Value is too big in size to fit in the Fist")
+        }
+    }
+
     /// Creates a new fist
     ///
     /// # Examples
@@ -30,33 +36,36 @@ impl<T: ?Sized, const SIZE: usize> Fist<T,SIZE> {
     /// let fist = Fist::<dyn Display, 4>::new(0_i32);
     /// //let fist = Fist::<dyn Display, 3>::new(0_i32); // panic: Value is too big in size to fit in the Fist
     /// ```
-    pub fn new<V : Unsize<T>>(v: V) -> Fist<T,SIZE>  {
-        if mem::size_of_val(&v) > SIZE {
-            panic!("Value is too big in size to fit in the Fist")
-        }
+    pub fn new<V: Unsize<T>>(v: V) -> Fist<T, SIZE> {
+        Self::check_size::<V>();
         let r: &T = &v;
-        unsafe {  
+        unsafe {
             let r: (*mut (), *mut ()) = mem::transmute_copy(&r);
-            Fist{
-                data: mem::transmute_copy(&*r.0),
+            Fist {
+                data: mem::transmute_copy(&*r.0), //TODO Fix panic
                 vtable: r.1,
-                _p: PhantomData
+                _p: PhantomData,
             }
         }
     }
 
     unsafe fn ptr(&self) -> *mut T {
-        mem::transmute_copy::<(*mut (),*mut ()),*mut T>(&(&self.data as *const _ as *mut (), self.vtable))
+        mem::transmute_copy::<(*mut (), *mut ()), *mut T>(&(
+            &self.data as *const _ as *mut (),
+            self.vtable,
+        ))
     }
 }
 
-impl<T: ?Sized, const SIZE: usize> Drop for Fist<T,SIZE> {
+impl<T: ?Sized, const SIZE: usize> Drop for Fist<T, SIZE> {
     fn drop(&mut self) {
-        unsafe { std::ptr::drop_in_place::<T>(self.ptr()); }
+        unsafe {
+            std::ptr::drop_in_place::<T>(self.ptr());
+        }
     }
 }
 
-impl<T: ?Sized, const SIZE: usize> Deref for Fist<T,SIZE> {
+impl<T: ?Sized, const SIZE: usize> Deref for Fist<T, SIZE> {
     type Target = T;
 
     fn deref(&self) -> &T {
@@ -64,7 +73,7 @@ impl<T: ?Sized, const SIZE: usize> Deref for Fist<T,SIZE> {
     }
 }
 
-impl<T: ?Sized, const SIZE: usize> DerefMut for Fist<T,SIZE> {
+impl<T: ?Sized, const SIZE: usize> DerefMut for Fist<T, SIZE> {
     fn deref_mut(&mut self) -> &mut T {
         unsafe { &mut *self.ptr() }
     }
@@ -73,12 +82,12 @@ impl<T: ?Sized, const SIZE: usize> DerefMut for Fist<T,SIZE> {
 /// Dynamic Fist
 pub enum DynFist<T: ?Sized, const SIZE: usize> {
     /// Stack Type
-    Fist(Fist<T,SIZE>),
+    Fist(Fist<T, SIZE>),
     /// Heap Type
-    Box(Box<T>)
+    Box(Box<T>),
 }
 
-impl<T: ?Sized, const SIZE: usize> DynFist<T,SIZE> {
+impl<T: ?Sized, const SIZE: usize> DynFist<T, SIZE> {
     /// Creates a new dynamic fist
     ///
     /// # Examples
@@ -90,7 +99,7 @@ impl<T: ?Sized, const SIZE: usize> DynFist<T,SIZE> {
     /// let dynfist_stack : fist::DynFist<dyn Display, 4> = fist::DynFist::new(0_i32);
     /// let dynfist_heap : fist::DynFist<dyn Display, 3> = fist::DynFist::new(0_i32);
     /// ```
-    pub fn new<V: Unsize<T>>(v: V) -> DynFist<T,SIZE> {
+    pub fn new<V: Unsize<T>>(v: V) -> DynFist<T, SIZE> {
         if mem::size_of::<V>() <= SIZE {
             DynFist::Fist(Fist::new(v))
         } else {
@@ -110,7 +119,7 @@ impl<T: ?Sized, const SIZE: usize> DynFist<T,SIZE> {
     /// assert!(dynfist_stack.on_stack());
     /// ```
     pub fn on_stack(&self) -> bool {
-        if let DynFist::Fist(_) = self { true } else { false }
+        matches!(self, DynFist::Fist(_))
     }
 
     /// Returns `true` if the owned value is on heap.
@@ -125,26 +134,26 @@ impl<T: ?Sized, const SIZE: usize> DynFist<T,SIZE> {
     /// assert!(dynfist_heap.on_heap());
     /// ```
     pub fn on_heap(&self) -> bool {
-        if let DynFist::Box(_) = self { true } else { false }
+        matches!(self, DynFist::Box(_))
     }
 }
 
-impl<T: ?Sized, const SIZE: usize> Deref for DynFist<T,SIZE> {
+impl<T: ?Sized, const SIZE: usize> Deref for DynFist<T, SIZE> {
     type Target = T;
 
     fn deref(&self) -> &T {
         match self {
             DynFist::Fist(ref f) => f.deref(),
-            DynFist::Box(ref b) => b.deref()
+            DynFist::Box(ref b) => b.deref(),
         }
     }
 }
 
-impl<T: ?Sized, const SIZE: usize> DerefMut for DynFist<T,SIZE> {
+impl<T: ?Sized, const SIZE: usize> DerefMut for DynFist<T, SIZE> {
     fn deref_mut(&mut self) -> &mut T {
         match self {
             DynFist::Fist(ref mut f) => f.deref_mut(),
-            DynFist::Box(ref mut b) => b.deref_mut()
+            DynFist::Box(ref mut b) => b.deref_mut(),
         }
     }
 }

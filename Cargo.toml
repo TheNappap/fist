@@ -1,8 +1,8 @@
 [package]
 name = "fist"
 version = "0.1.0"
-authors = ["mathijsd <napoleonpapiertjes@gmail.com>"]
-edition = "2018"
+authors = ["TheNappap <napoleonpapiertjes@gmail.com>"]
+edition = "2021"
 
 [dependencies]
 
