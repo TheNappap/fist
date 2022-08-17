@@ -10,6 +10,7 @@ mod tests;
 use std::marker::{PhantomData, Unsize};
 use std::mem;
 use std::ops::{Deref, DerefMut};
+use std::slice::from_raw_parts;
 
 /// Fixed Sized Trait (Object) (FiST)
 pub struct Fist<T: ?Sized, const SIZE: usize> {
@@ -40,9 +41,10 @@ impl<T: ?Sized, const SIZE: usize> Fist<T, SIZE> {
         Self::check_size::<V>();
         let r: &T = &v;
         unsafe {
-            let r: (*mut (), *mut ()) = mem::transmute_copy(&r);
+            let r: (*mut u8, *mut ()) = mem::transmute_copy(&r);
+            let data: &[u8] = from_raw_parts( r.0, mem::size_of::<V>());
             Fist {
-                data: mem::transmute_copy(&*r.0), //TODO Fix panic
+                data: data.try_into().expect("Value is too big in size to fit in the Fist"),
                 vtable: r.1,
                 _p: PhantomData,
             }
