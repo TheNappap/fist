@@ -43,6 +43,7 @@ impl<T: ?Sized, const SIZE: usize> Fist<T, SIZE> {
         unsafe {
             let r: (*mut u8, *mut ()) = mem::transmute_copy(&r);
             let data: &[u8] = from_raw_parts( r.0, mem::size_of::<V>());
+            mem::forget(v);
             Fist {
                 data: data.try_into().expect("Value is too big in size to fit in the Fist"),
                 vtable: r.1,
