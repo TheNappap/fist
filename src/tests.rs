@@ -39,6 +39,8 @@ impl TestTrait for Box<[u8; 128]> {
 fn fist_init() {
     let f = Fist::<dyn TestTrait, 4>::new(255);
     assert_eq!(f.test(), 255);
+    let f = Fist::<dyn TestTrait, 8>::new(255);
+    assert_eq!(f.test(), 255);
     let f = Fist::<dyn TestTrait, 8>::new(Box::new([255; 128]));
     assert_eq!(f.test(), 255);
     let f = Fist::<[i32], 128>::new([255; 32]);
@@ -48,6 +50,8 @@ fn fist_init() {
 #[test]
 fn dynfist_init() {
     let f = DynFist::<dyn TestTrait, 4>::new(255);
+    assert_eq!(f.test(), 255);
+    let f = DynFist::<dyn TestTrait, 8>::new(255);
     assert_eq!(f.test(), 255);
     let f = DynFist::<dyn TestTrait, 3>::new(255_i32);
     assert_eq!(f.test(), 255);

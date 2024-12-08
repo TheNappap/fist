@@ -20,13 +20,17 @@ struct _Fist<T: ?Sized, const SIZE: usize> {
 
 impl<T: ?Sized, const SIZE: usize> _Fist<T, SIZE> {
     pub fn new<V: Unsize<T>>(v: V) -> _Fist<T, SIZE> {
+        let value_size = mem::size_of::<V>();
+        assert!(value_size <= SIZE);
         let r: &T = &v;
         unsafe {
             let r: (*mut u8, *mut ()) = mem::transmute_copy(&r);
-            let data: &[u8] = from_raw_parts( r.0, mem::size_of::<V>());
+            let value_data: &[u8] = from_raw_parts( r.0, value_size);
+            let mut data = [0_u8; SIZE];
+            data[..value_size].copy_from_slice(value_data);
             mem::forget(v);
             _Fist {
-                data: data.try_into().expect("Value is too big in size to fit in the Fist"),
+                data,
                 vtable: r.1,
                 _p: PhantomData,
             }
