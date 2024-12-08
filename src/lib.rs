@@ -12,39 +12,20 @@ use std::mem;
 use std::ops::{Deref, DerefMut};
 use std::slice::from_raw_parts;
 
-/// Fixed Sized Trait (Object) (FiST)
-pub struct Fist<T: ?Sized, const SIZE: usize> {
+struct _Fist<T: ?Sized, const SIZE: usize> {
     data: [u8; SIZE],
     vtable: *mut (),
     _p: PhantomData<T>,
 }
 
-impl<T: ?Sized, const SIZE: usize> Fist<T, SIZE> {
-    const fn check_size<V>() {
-        if mem::size_of::<V>() > SIZE {
-            panic!("Value is too big in size to fit in the Fist")
-        }
-    }
-
-    /// Creates a new fist
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use fist::Fist;
-    /// use std::fmt::Display;
-    ///
-    /// let fist = Fist::<dyn Display, 4>::new(0_i32);
-    /// //let fist = Fist::<dyn Display, 3>::new(0_i32); // panic: Value is too big in size to fit in the Fist
-    /// ```
-    pub fn new<V: Unsize<T>>(v: V) -> Fist<T, SIZE> {
-        Self::check_size::<V>();
+impl<T: ?Sized, const SIZE: usize> _Fist<T, SIZE> {
+    pub fn new<V: Unsize<T>>(v: V) -> _Fist<T, SIZE> {
         let r: &T = &v;
         unsafe {
             let r: (*mut u8, *mut ()) = mem::transmute_copy(&r);
             let data: &[u8] = from_raw_parts( r.0, mem::size_of::<V>());
             mem::forget(v);
-            Fist {
+            _Fist {
                 data: data.try_into().expect("Value is too big in size to fit in the Fist"),
                 vtable: r.1,
                 _p: PhantomData,
@@ -60,7 +41,7 @@ impl<T: ?Sized, const SIZE: usize> Fist<T, SIZE> {
     }
 }
 
-impl<T: ?Sized, const SIZE: usize> Drop for Fist<T, SIZE> {
+impl<T: ?Sized, const SIZE: usize> Drop for _Fist<T, SIZE> {
     fn drop(&mut self) {
         unsafe {
             std::ptr::drop_in_place::<T>(self.ptr());
@@ -68,7 +49,7 @@ impl<T: ?Sized, const SIZE: usize> Drop for Fist<T, SIZE> {
     }
 }
 
-impl<T: ?Sized, const SIZE: usize> Deref for Fist<T, SIZE> {
+impl<T: ?Sized, const SIZE: usize> Deref for _Fist<T, SIZE> {
     type Target = T;
 
     fn deref(&self) -> &T {
@@ -76,16 +57,54 @@ impl<T: ?Sized, const SIZE: usize> Deref for Fist<T, SIZE> {
     }
 }
 
-impl<T: ?Sized, const SIZE: usize> DerefMut for Fist<T, SIZE> {
+impl<T: ?Sized, const SIZE: usize> DerefMut for _Fist<T, SIZE> {
     fn deref_mut(&mut self) -> &mut T {
         unsafe { &mut *self.ptr() }
+    }
+}
+
+
+/// Fixed Sized Trait (Object) (FiST)
+pub struct Fist<T: ?Sized, const SIZE: usize>(_Fist<T, SIZE>);
+
+impl<T: ?Sized, const SIZE: usize> Fist<T, SIZE> {
+    /// Creates a new fist
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use fist::Fist;
+    /// # use std::fmt::Display;
+    /// let fist = Fist::<dyn Display, 4>::new(0_i32);
+    /// ```
+    /// ```compile_fail
+    /// # use fist::Fist;
+    /// # use std::fmt::Display;
+    /// let fist = Fist::<dyn Display, 3>::new(0_i32);
+    /// ```
+    pub fn new<V: Unsize<T>>(v: V) -> Fist<T, SIZE> {
+        const { assert!(mem::size_of::<V>() <= SIZE) }
+        Fist(_Fist::new(v))
+    }
+}
+
+impl<T: ?Sized, const SIZE: usize> Deref for Fist<T, SIZE> {
+    type Target = T;
+    fn deref(&self) -> &T {
+        &self.0
+    }
+}
+
+impl<T: ?Sized, const SIZE: usize> DerefMut for Fist<T, SIZE> {
+    fn deref_mut(&mut self) -> &mut T {
+        &mut self.0
     }
 }
 
 /// Dynamic Fist
 pub enum DynFist<T: ?Sized, const SIZE: usize> {
     /// Stack Type
-    Fist(Fist<T, SIZE>),
+    Fist(_Fist<T, SIZE>),
     /// Heap Type
     Box(Box<T>),
 }
@@ -96,15 +115,14 @@ impl<T: ?Sized, const SIZE: usize> DynFist<T, SIZE> {
     /// # Examples
     ///
     /// ```
-    /// use fist::DynFist;
-    /// use std::fmt::Display;
-    ///
+    /// # use fist::DynFist;
+    /// # use std::fmt::Display;
     /// let dynfist_stack : fist::DynFist<dyn Display, 4> = fist::DynFist::new(0_i32);
     /// let dynfist_heap : fist::DynFist<dyn Display, 3> = fist::DynFist::new(0_i32);
     /// ```
     pub fn new<V: Unsize<T>>(v: V) -> DynFist<T, SIZE> {
         if mem::size_of::<V>() <= SIZE {
-            DynFist::Fist(Fist::new(v))
+            DynFist::Fist(_Fist::new(v))
         } else {
             DynFist::Box(Box::<V>::new(v))
         }
