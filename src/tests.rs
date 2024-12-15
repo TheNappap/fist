@@ -1,4 +1,5 @@
-use super::{DynFist, Fist};
+
+use crate::{Fist, DynFist};
 use std::mem::size_of_val;
 
 trait TestTrait {
