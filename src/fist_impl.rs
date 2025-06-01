@@ -29,10 +29,12 @@ impl<T: ?Sized, const SIZE: usize> _Fist<T, SIZE> {
     }
 
     unsafe fn ptr(&self) -> *mut T {
-        mem::transmute_copy::<(*mut (), *mut ()), *mut T>(&(
-            &self.data as *const _ as *mut (),
-            self.vtable,
-        ))
+        unsafe {
+            mem::transmute_copy::<(*mut (), *mut ()), *mut T>(&(
+                &self.data as *const _ as *mut (),
+                self.vtable,
+            ))
+        }
     }
 }
 

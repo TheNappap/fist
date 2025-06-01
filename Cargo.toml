@@ -2,12 +2,12 @@
 name = "fist"
 version = "0.1.0"
 authors = ["TheNappap <napoleonpapiertjes@gmail.com>"]
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 
 [dev-dependencies]
-criterion = "0.5"
+criterion = "0.6"
 
 [[bench]]
 name = "benches"
